@@ -11,6 +11,8 @@ import { portalShaderMaterial } from "./shaders/portal";
 /**
  * Base
  */
+
+
 // Debug
 let debugObject = {};
 debugObject.clearColor = "#201919";
@@ -45,6 +47,13 @@ const canvas = document.querySelector("canvas.webgl");
 
 // Scene
 const scene = new THREE.Scene();
+
+
+/**
+ *
+ * Overlay Shader for loading screen
+ *
+ */
 
 const overlayGeometry = new THREE.PlaneBufferGeometry(2, 2, 1, 1);
 const overlayMaterial = new THREE.ShaderMaterial({
@@ -85,6 +94,12 @@ const updateAllMaterials = () => {
   });
 };
 
+
+/**
+ *
+ * Add ambient light
+ */
+
 const amBLight = new THREE.AmbientLight(0x404040); // soft white light
 
 amBLight.position.set(5, 5, 0);
@@ -104,6 +119,13 @@ directLight.position.set(3, 3, -2.25);
 
 scene.add(directLight);
 
+
+/**
+ *
+ * Plane geometry: make less of a void
+ *
+ */
+
 const floorGeometry = new THREE.PlaneGeometry(100, 100, 20);
 const floorMaterial = new THREE.MeshStandardMaterial({
   color: "#E7E545",
@@ -118,6 +140,13 @@ floor.position.y = -0.01;
 floor.receiveShadow = true;
 
 scene.add(floor);
+
+
+/**
+ *
+ * Fireflies Custom Geometry
+ *
+ */
 
 const fireFliesGeomtery = new THREE.BufferGeometry();
 const firefliesCount = 20;
@@ -143,7 +172,9 @@ fireFliesGeomtery.setAttribute(
   new THREE.BufferAttribute(scaleArray, 1)
 );
 
-// fireflies material
+/**
+ *  fireflies material
+ */
 const firefliesMaterial = firefliesShaderMaterial({
   uniforms: {
     uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
@@ -189,6 +220,7 @@ const LoadingManager = new THREE.LoadingManager(
   }
 );
 
+
 // Texture loader
 const textureLoader = new THREE.TextureLoader(LoadingManager);
 
@@ -200,6 +232,9 @@ const bakedMaterial = new THREE.MeshBasicMaterial({
   map: bakedTexture,
   fog: true,
 });
+
+
+// Portal Shader Material
 
 const portalLightMaterial = portalShaderMaterial({
   uniforms: {
@@ -241,6 +276,8 @@ gltfLoader.load("portals.glb", (gltf) => {
 
   scene.add(gltf.scene);
 });
+
+// Initialise animation mixer
 let mixer = null;
 
 let fox = null;
@@ -338,6 +375,7 @@ const tick = () => {
 
   // Update controls
   controls.update();
+
   if (mixer) {
     mixer.update(deltaTime);
     if (fox) {
