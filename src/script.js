@@ -1,10 +1,10 @@
 import "./style.css";
 import * as dat from "lil-gui";
 import * as THREE from "three";
+import { gsap } from "gsap";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
-// import { Dire } from "three/examples/jsm/helpers";
 import { firefliesShaderMaterial } from "./shaders/fireflies";
 import { portalShaderMaterial } from "./shaders/portal";
 
@@ -17,7 +17,6 @@ debugObject.clearColor = "#201919";
 debugObject.portalColorStart = "#d4ce11";
 debugObject.portalColorEnd = "#fffff";
 
-// console.log('hash', window.location.hash);
 let gui;
 if (window.location.hash === "#debug") {
   gui = new dat.GUI({
@@ -47,13 +46,36 @@ const canvas = document.querySelector("canvas.webgl");
 // Scene
 const scene = new THREE.Scene();
 
+const overlayGeometry = new THREE.PlaneBufferGeometry(2, 2, 1, 1);
+const overlayMaterial = new THREE.ShaderMaterial({
+  transparent: true,
+  uniforms: {
+    uAlpha: {
+      value: 1,
+    },
+  },
+  vertexShader: `
+        void main(){
+            gl_Position =  vec4(position, 1.0);
+        }
+    `,
+  fragmentShader: `
+    uniform float uAlpha;
+    void main(){
+        gl_FragColor = vec4(vec3(0.0), uAlpha);
+    }
+    `,
+});
+
+const overlay = new THREE.Mesh(overlayGeometry, overlayMaterial);
+
+scene.add(overlay);
+
 const updateAllMaterials = () => {
   scene.traverse((child) => {
     if (
       child instanceof THREE.Mesh &&
       child.material instanceof THREE.MeshStandardMaterial
-      //  &&
-      // child.material instanceof THREE.MeshBasicMaterial
     ) {
       child.material.envMapIntensity = 1;
       child.material.needsUpdate = true;
@@ -63,32 +85,24 @@ const updateAllMaterials = () => {
   });
 };
 
-const cmaeraLight = new THREE.AmbientLight(0x404040); // soft white light
+const amBLight = new THREE.AmbientLight(0x404040); // soft white light
 
-cmaeraLight.position.set(5, 5, 0);
-cmaeraLight.lookAt(0, 0, 0);
-scene.add(cmaeraLight);
+amBLight.position.set(5, 5, 0);
+amBLight.lookAt(0, 0, 0);
+scene.add(amBLight);
 
 let col = 0x605050;
 scene.background = new THREE.Color(col);
 scene.fog = new THREE.Fog(col, 400, 480);
 
-const width = 100;
-const height = 100;
-const intensity = 1;
+const directLight = new THREE.DirectionalLight("#ffffff", 4);
+directLight.castShadow = true;
+directLight.shadow.camera.far = 15;
+directLight.shadow.mapSize.set(1024, 1024);
+directLight.shadow.normalBias = 0.05;
+directLight.position.set(3, 3, -2.25);
 
-const rectLight = new THREE.DirectionalLight("#ffffff", 4);
-// rectLight.position.set( 0, 5, 5);
-// rectLight.lookAt( 0, 5, 5 );
-rectLight.castShadow = true;
-rectLight.shadow.camera.far = 15;
-rectLight.shadow.mapSize.set(1024, 1024);
-rectLight.shadow.normalBias = 0.05;
-rectLight.position.set(3, 3, -2.25);
-
-// const helper = new RectAreaLightHelper( rectLight );
-// rectLight.add(helper)
-scene.add(rectLight);
+scene.add(directLight);
 
 const floorGeometry = new THREE.PlaneGeometry(100, 100, 20);
 const floorMaterial = new THREE.MeshStandardMaterial({
@@ -129,12 +143,7 @@ fireFliesGeomtery.setAttribute(
   new THREE.BufferAttribute(scaleArray, 1)
 );
 
-// E7E545
-// const firefliesMaterial = new THREE.PointsMaterial({
-//     size: 0.1,
-//     sizeAttenuation: true
-// })
-
+// fireflies material
 const firefliesMaterial = firefliesShaderMaterial({
   uniforms: {
     uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
@@ -142,6 +151,7 @@ const firefliesMaterial = firefliesShaderMaterial({
     uTime: { value: 0 },
   },
 });
+
 if (window.location.hash === "#debug") {
   gui
     .add(firefliesMaterial.uniforms.uSize, "value", 0, 500, 1)
@@ -152,13 +162,38 @@ const fireflies = new THREE.Points(fireFliesGeomtery, firefliesMaterial);
 
 scene.add(fireflies);
 
-const updateMaterials = () => {};
-
 /**
  * Loaders
  */
+
+let loadingBar = document.getElementById("loading-bar");
+let fileBeingLoaded = document.getElementById("file-loaded");
+
+const LoadingManager = new THREE.LoadingManager(
+  () => {
+    gsap.delayedCall(0.8, () => {
+      loadingBar.classList.add("ended");
+      loadingBar.style.transform = "";
+
+      fileBeingLoaded.style.display = `none`;
+      loadingBar.style.display = `none`;
+
+      gsap.to(overlayMaterial.uniforms.uAlpha, { duration: 3, value: 0 });
+    });
+  },
+  (itemUrl, itemsLoaded, itemsTotal) => {
+    console.log(itemsTotal);
+    console.log(itemUrl);
+
+    const progress = (itemsLoaded / itemsTotal).toFixed(1);
+
+    loadingBar.style.transform = `scaleX(${progress})`;
+    fileBeingLoaded.innerHTML = `Loading... ${progress * 100}%`;
+  }
+);
+
 // Texture loader
-const textureLoader = new THREE.TextureLoader();
+const textureLoader = new THREE.TextureLoader(LoadingManager);
 
 const bakedTexture = textureLoader.load("baked.jpg");
 bakedTexture.encoding = THREE.sRGBEncoding;
@@ -180,26 +215,15 @@ const portalLightMaterial = portalShaderMaterial({
 const poleLightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffe5 });
 
 // Draco loader
-const dracoLoader = new DRACOLoader();
+const dracoLoader = new DRACOLoader(LoadingManager);
 dracoLoader.setDecoderPath("draco/");
 
 // GLTF loader
-const gltfLoader = new GLTFLoader();
+const gltfLoader = new GLTFLoader(LoadingManager);
 gltfLoader.setDRACOLoader(dracoLoader);
 
 gltfLoader.load("portals.glb", (gltf) => {
-  // console.log(gltf.scene);
-  // gltf.scene.traverse((child) => {
-  //   console.log(child.isMesh, child);
-
-  // if (child.isMesh) {
-  //   child.castShadow = true;
-  //   child.receiveShadow = true;
-  // }
-
   updateAllMaterials();
-
-  // })
   const bakedMesh = gltf.scene.children.find((child) => child.name === "baked");
 
   const portalMesh = gltf.scene.children.find(
@@ -218,21 +242,6 @@ gltfLoader.load("portals.glb", (gltf) => {
   poleAMesh.material = poleLightMaterial;
   poleBMesh.material = poleLightMaterial;
 
-  //   gltf.scene.traverse((child) => {
-  //     let emmisions = ["portalLight", "poleLightA", "poleLightB"];
-  //     console.log(child.name);
-  //     if (emmisions.includes(child.name)) {
-  //       if (child.name === "portalLight") {
-  //         child.material = portalLightMaterial;
-  //       } else {
-  //         child.material = poleLightMaterial;
-  //       }
-  //     } else {
-  //       child.material = bakedMaterial;
-  //     }
-  //     // child.receiveShadow =true
-  //     // child.castShadow  =true
-  //   });
   scene.add(gltf.scene);
 });
 let mixer = null;
@@ -243,15 +252,6 @@ gltfLoader.load("/models/Fox/glTF/Fox.gltf", (gltf) => {
   fox = gltf;
   mixer = new THREE.AnimationMixer(fox.scene);
   const action = mixer.clipAction(fox.animations[2]);
-
-  // fox.scene.traverse(function (child) {
-
-  //   // console.log(child.isMesh, child);
-  //   // if (child.isMesh) {
-  //     child.castShadow = true;
-  //     child.receiveShadow = true;
-  //   // }
-  // });
 
   action.play();
   fox.scene.rotation.y = Math.PI;
@@ -322,16 +322,9 @@ renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.physicallyCorrectLights = true;
-// renderer.outputEncoding = THREE.sRGBEncoding;
-// renderer.toneMapping = THREE.ACESFilmicToneMapping;
-// renderer.toneMappingExposure = 1;
 renderer.setSize(sizes.width, sizes.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-if (mixer) {
 
-console.log({fox});
-}
-// fox.position.z = 0.000001 ;
 /**
  * Animate
  */
@@ -350,33 +343,17 @@ const tick = () => {
   controls.update();
   if (mixer) {
     mixer.update(deltaTime);
-// console.log({fox});
-    if(fox){
+    if (fox) {
       fox.scene.position.z -= 0.02;
       if (fox.scene.position.z <= -0.199995) {
         fox.scene.position.y += 0.004;
       }
 
-      if(fox.scene.position.z <= -2.3){
-        // console.log();
+      if (fox.scene.position.z <= -2.3) {
+        scene.remove(fox.scene);
 
-        scene.remove(fox.scene)
-
-        fox = null
-        // scene.traverse((child) => {
-        //   if (child instanceof THREE.Mesh) {
-        //     child.geometry.dispose();
-
-        //     for (const key in child.material) {
-        //       const value = child.material[key];
-        //       if (value && typeof value?.dispose === "function") {
-        //         value.dispose();
-        //       }
-        //     }
-        //   }
-        // });
+        fox = null;
       }
-
     }
   }
 
