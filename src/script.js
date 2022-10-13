@@ -182,9 +182,6 @@ const LoadingManager = new THREE.LoadingManager(
     });
   },
   (itemUrl, itemsLoaded, itemsTotal) => {
-    console.log(itemsTotal);
-    console.log(itemUrl);
-
     const progress = (itemsLoaded / itemsTotal).toFixed(1);
 
     loadingBar.style.transform = `scaleX(${progress})`;
