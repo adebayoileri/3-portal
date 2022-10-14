@@ -6,7 +6,6 @@ export const firefliesShaderMaterial = (opts) => {
   return new THREE.ShaderMaterial({
     fragmentShader,
     vertexShader,
-    transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     ...opts,
